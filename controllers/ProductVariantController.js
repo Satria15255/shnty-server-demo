@@ -5,9 +5,27 @@ exports.createVariant = async (req, res) => {
   try {
     const { productId, size, stock } = req.body;
 
+    if (!productId || !size || stock === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Product, size, and stock are required",
+      });
+    }
+
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    const normalizedSize = String(size).trim().toUpperCase();
+
     const existingVariant = await ProductVariant.findOne({
       product: productId,
-      size,
+      size: normalizedSize,
     });
 
     if (existingVariant) {
@@ -19,7 +37,7 @@ exports.createVariant = async (req, res) => {
 
     const variant = await ProductVariant.create({
       product: productId,
-      size,
+      size: normalizedSize,
       stock,
     });
 
@@ -28,9 +46,11 @@ exports.createVariant = async (req, res) => {
       data: variant,
     });
   } catch (error) {
+    console.error("Create variant error:", error);
+
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to create variant",
     });
   }
 };
@@ -39,7 +59,7 @@ exports.getVariantsByProduct = async (req, res) => {
   try {
     const variants = await ProductVariant.find({
       product: req.params.productId,
-    }).sort({ size: 1 });
+    });
 
     res.status(200).json({
       success: true,
@@ -47,9 +67,11 @@ exports.getVariantsByProduct = async (req, res) => {
       data: variants,
     });
   } catch (error) {
+    console.error("Get variants error:", error);
+
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to fetch variants",
     });
   }
 };
@@ -70,28 +92,18 @@ exports.getVariantById = async (req, res) => {
       data: variant,
     });
   } catch (error) {
+    console.error("Get variant error:", error);
+
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to fetch variant",
     });
   }
 };
 
 exports.updateVariant = async (req, res) => {
   try {
-    const { size, stock } = req.body;
-
-    const variant = await ProductVariant.findByIdAndUpdate(
-      req.params.id,
-      {
-        size,
-        stock,
-      },
-      {
-        new: true,
-        runValidators: true,
-      },
-    );
+    const variant = await ProductVariant.findById(req.params.id);
 
     if (!variant) {
       return res.status(404).json({
@@ -100,14 +112,41 @@ exports.updateVariant = async (req, res) => {
       });
     }
 
+    if (req.body.size !== undefined) {
+      const normalizedSize = String(req.body.size).trim().toUpperCase();
+
+      const existingVariant = await ProductVariant.findOne({
+        product: variant.product,
+        size: normalizedSize,
+        _id: { $ne: variant._id },
+      });
+
+      if (existingVariant) {
+        return res.status(400).json({
+          success: false,
+          message: "Variant size already exists",
+        });
+      }
+
+      variant.size = normalizedSize;
+    }
+
+    if (req.body.stock !== undefined) {
+      variant.stock = req.body.stock;
+    }
+
+    await variant.save();
+
     res.status(200).json({
       success: true,
       data: variant,
     });
   } catch (error) {
+    console.error("Update variant error:", error);
+
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to update variant",
     });
   }
 };
@@ -128,9 +167,11 @@ exports.deleteVariant = async (req, res) => {
       message: "Variant deleted successfully",
     });
   } catch (error) {
+    console.error("Delete variant error:", error);
+
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to delete variant",
     });
   }
 };

@@ -33,21 +33,33 @@ exports.createTransaction = async (req, res) => {
     }
 
     // GROUP PRODUCTS
-    const productMap = {}; // key = productId-size, value = { product, size, quantity }
+    const productMap = {};
 
     for (const item of products) {
-      const key = `${item.product}-${item.size}`;
+      const productId = String(item.product);
+
+      const normalizedSize = String(item.size).trim().toUpperCase();
+
+      const quantity = Number(item.quantity ?? 1);
+
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        return res.status(400).json({
+          message: "Invalid product quantity",
+        });
+      }
+
+      const key = `${productId}-${normalizedSize}`;
+
       if (!productMap[key]) {
         productMap[key] = {
-          product: item.product,
-          size: item.size,
-          quantity: 1,
+          product: productId,
+          size: normalizedSize,
+          quantity,
         };
       } else {
-        productMap[key].quantity += 1;
+        productMap[key].quantity += quantity;
       }
     }
-
     // CALCULATE PRODUCTS & TOTAL PRICE
     let totalProducts = 0;
     let totalPrice = 0;
@@ -158,8 +170,7 @@ exports.createTransaction = async (req, res) => {
         ? new Date(Date.now() + 60 * 60 * 1000)
         : null;
 
-    const paymentStatus =
-      paymentMethod === "Cash on Delivery" ? "Paid" : "Unpaid";
+    const paymentStatus = "Unpaid";
 
     // CREATE TRANSACTIONS
     const newTransaction = new Transaction({
@@ -215,6 +226,12 @@ exports.payTransaction = async (req, res) => {
     }
 
     // Check  Expired
+    if (transaction.paymentStatus === "Expired") {
+      return res.status(400).json({
+        message: "Payment already expired",
+      });
+    }
+
     if (
       transaction.paymentExpiredAt &&
       new Date() > transaction.paymentExpiredAt
@@ -226,17 +243,18 @@ exports.payTransaction = async (req, res) => {
         });
 
         if (variant) {
-          variant.stock += quantity;
+          variant.stock += item.quantity;
           await variant.save();
         }
       }
 
       transaction.paymentStatus = "Expired";
+      transaction.status = "Expired";
 
       await transaction.save();
 
       return res.status(400).json({
-        message: "Payment Expired",
+        message: "Payment expired",
       });
     }
 
@@ -314,7 +332,7 @@ exports.updateTransactionStatus = async (req, res) => {
     const transaction = await Transaction.findByIdAndUpdate(
       req.params.id,
       { status },
-      { new: true },
+      { new: true, runValidators: true },
     );
 
     if (!transaction) {
@@ -345,20 +363,16 @@ exports.cancelTransaction = async (req, res) => {
       return res.status(404).json({ message: "Unauthorized" });
     }
 
-    if (
-      transaction.status === "Shipped" ||
-      transaction.status === "Delivered"
-    ) {
+    if (["Shipped", "Delivered", "Completed"].includes(transaction.status)) {
       return res.status(400).json({
-        message: "The order has been shipped and cannot be cancelled.",
+        message: "Order can no longer be cancelled",
       });
     }
 
-    if (
-      transaction.status === "Cancelled" ||
-      transaction.status === "Expired"
-    ) {
-      return res.status(400).json({ message: "Order already cancelled" });
+    if (["Cancelled", "Expired"].includes(transaction.status)) {
+      return res.status(400).json({
+        message: "Order already cancelled or expired",
+      });
     }
 
     for (const item of transaction.products) {
@@ -368,7 +382,7 @@ exports.cancelTransaction = async (req, res) => {
       });
 
       if (variant) {
-        variant.stock += quantity;
+        variant.stock += item.quantity;
         await variant.save();
       }
     }
@@ -402,11 +416,9 @@ exports.confirmReceived = async (req, res) => {
     }
 
     if (transaction.status !== "Delivered") {
-      return res.status(400).json({ message: "Order is not delivered yet" });
-    }
-
-    if (transaction.status === "Completed") {
-      return res.status(400).json({ message: "Order already completed!" });
+      return res.status(400).json({
+        message: "Order is not delivered yet",
+      });
     }
 
     transaction.status = "Completed";

@@ -19,8 +19,9 @@ const cartSchema = new mongoose.Schema(
           default: 1,
         },
         size: {
-          type: Number,
+          type: String,
           required: true,
+          default: "One Size",
         },
         price: {
           type: Number,

@@ -11,7 +11,10 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    phoneNumber: Number,
+    phoneNumber: {
+      type: String,
+      required: true,
+    },
     products: [
       {
         product: {
@@ -19,12 +22,46 @@ const transactionSchema = new mongoose.Schema(
           ref: "Product",
           required: true,
         },
-        size: { type: Number, required: true },
-        quantity: { type: Number, required: true },
-        pricePerUnit: { type: Number, required: true },
-        subtotal: { type: Number, required: true },
 
-        // Snapshot data (optional, tapi bagus untuk record)
+        size: {
+          type: String,
+          required: true,
+          trim: true,
+          uppercase: true,
+        },
+
+        quantity: {
+          type: Number,
+          required: true,
+          min: 1,
+        },
+
+        originalPrice: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+
+        discountPercent: {
+          type: Number,
+          default: 0,
+          min: 0,
+          max: 100,
+        },
+
+        pricePerUnit: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+
+        subtotal: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+
+        // Snapshot
         name: String,
         brand: String,
         image: String,

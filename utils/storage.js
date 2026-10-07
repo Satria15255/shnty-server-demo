@@ -6,7 +6,7 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
     return {
-      folder: "zafaris-co",
+      folder: "shnty.id",
       allowed_formats: ["jpg", "png", "jpeg", "webp"],
       public_id: `${Date.now()}-${file.originalname.split(".")[0]}`,
     };
