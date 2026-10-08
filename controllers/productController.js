@@ -90,27 +90,120 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    const product = new Product({
-      name: req.body.name,
-      brand: req.body.brand,
-      price: req.body.price,
-      category: req.body.category,
-      type: req.body.type,
-      material: req.body.material,
-      color: req.body.color,
-      description: req.body.description,
-      image: req.file.path,
-      createdBy: req.user?.id || null,
+    // 1. Parse variants dari multipart/form-data.
+    let variants;
+
+    try {
+      variants = JSON.parse(req.body.variants);
+    } catch {
+      return res.status(400).json({
+        message: "Variants must be valid JSON",
+      });
+    }
+
+    if (!Array.isArray(variants) || variants.length === 0) {
+      return res.status(400).json({
+        message: "At least one variant is required",
+      });
+    }
+
+    // 2. Validasi ulang di backend.
+    const invalidVariant = variants.some((variant) => {
+      return (
+        !variant ||
+        typeof variant.size !== "string" ||
+        !variant.size.trim() ||
+        typeof variant.stock !== "number" ||
+        !Number.isSafeInteger(variant.stock) ||
+        variant.stock < 0
+      );
     });
 
-    const savedProduct = await product.save();
+    if (invalidVariant) {
+      return res.status(400).json({
+        message: "Each variant needs a size and a non-negative integer stock",
+      });
+    }
 
+    const normalizedVariants = variants.map((variant) => ({
+      size: variant.size.trim().toUpperCase(),
+      stock: variant.stock,
+    }));
+
+    const uniqueSizes = new Set(
+      normalizedVariants.map((variant) => variant.size),
+    );
+
+    if (uniqueSizes.size !== normalizedVariants.length) {
+      return res.status(400).json({
+        message: "Duplicate sizes are not allowed",
+      });
+    }
+
+    const rawPrice = req.body.price;
+
+    if (
+      typeof rawPrice !== "string" ||
+      !rawPrice.trim() ||
+      !Number.isFinite(Number(rawPrice)) ||
+      Number(rawPrice) < 0
+    ) {
+      return res.status(400).json({
+        message: "Price must be a valid non-negative number",
+      });
+    }
+
+    // 3. Simpan product dan variants dalam satu transaction.
+    const savedProduct = await Product.db.transaction(async (session) => {
+      const product = new Product({
+        name: req.body.name,
+        brand: req.body.brand,
+        price: Number(rawPrice),
+        category: req.body.category,
+        type: req.body.type,
+        material: req.body.material,
+        color: req.body.color,
+        description: req.body.description,
+        image: req.file.path,
+        createdBy: req.user?.id || null,
+      });
+
+      await product.save({ session });
+
+      for (const variant of normalizedVariants) {
+        const productVariant = new ProductVariant({
+          product: product._id,
+          size: variant.size,
+          stock: variant.stock,
+        });
+
+        await productVariant.save({ session });
+      }
+
+      return product.toObject();
+    });
+
+    // Pertahankan bentuk response product seperti controller sebelumnya.
     return res.status(201).json(savedProduct);
   } catch (error) {
     console.error("Create product error:", error);
 
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        message: Object.values(error.errors)
+          .map((detail) => detail.message)
+          .join(", "),
+      });
+    }
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        message: "Product or variant already exists",
+      });
+    }
+
     return res.status(500).json({
-      message: "Failed to create product",
+      message: "Failed to create product and variants",
     });
   }
 };
