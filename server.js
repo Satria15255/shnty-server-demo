@@ -1,8 +1,8 @@
 const dotenv = require("dotenv");
 dotenv.config();
-
 const express = require("express");
 const connectDB = require("./config/db");
+const { connectRedis } = require("./config/redis");
 const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
@@ -18,14 +18,15 @@ const chartRoutes = require("./routes/chartRoutes");
 
 connectDB();
 const app = express();
+app.set("trust proxy", "loopback");
+
+connectRedis().catch((err) => {
+  console.error("Redis unavailable. Running without cache:", err.message);
+});
 
 app.use(
   cors({
-    origin: [
-      "https://zafarisco.vercel.app",
-      "https://zafaris-demo-ecomerce.vercel.app",
-      "http://localhost:5173",
-    ],
+    origin: ["https://shnty-demo.vercel.app", "http://localhost:5173"],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   }),

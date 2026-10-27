@@ -20,31 +20,129 @@ exports.getLatestProducts = async (req, res) => {
   }
 };
 
+const normalizeQueryArray = (value) => {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+
+  return [
+    ...new Set(
+      values
+        .filter((item) => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ];
+};
+
+const escapeRegex = (value) => {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
 exports.getAllProducts = async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, category, type, size, discount, latest } = req.query;
 
-    const filter = {};
+    const categories = normalizeQueryArray(category);
+    const types = normalizeQueryArray(type);
+    const sizes = normalizeQueryArray(size).map((item) => item.toUpperCase());
 
-    if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { brand: { $regex: search, $options: "i" } },
-        { category: { $regex: search, $options: "i" } },
-        { type: { $regex: search, $options: "i" } },
-        { material: { $regex: search, $options: "i" } },
-        { color: { $regex: search, $options: "i" } },
-      ];
+    const conditions = [];
+    const now = new Date();
+
+    // 1. Search
+    if (typeof search === "string" && search.trim()) {
+      const keyword = escapeRegex(search.trim().slice(0, 100));
+
+      conditions.push({
+        $or: [
+          { name: { $regex: keyword, $options: "i" } },
+          { brand: { $regex: keyword, $options: "i" } },
+          { category: { $regex: keyword, $options: "i" } },
+          { type: { $regex: keyword, $options: "i" } },
+          { material: { $regex: keyword, $options: "i" } },
+          { color: { $regex: keyword, $options: "i" } },
+        ],
+      });
     }
 
-    const products = await Product.find(filter).populate("variants");
+    // 2. Collection -> Product.category
+    if (categories.length > 0) {
+      conditions.push({
+        category: { $in: categories },
+      });
+    }
 
-    res.json(products);
+    // 3. Category -> Product.type
+    if (types.length > 0) {
+      conditions.push({
+        type: { $in: types },
+      });
+    }
+
+    // 4. Size -> ProductVariant
+    if (sizes.length > 0) {
+      const productIds = await ProductVariant.distinct("product", {
+        size: { $in: sizes },
+        stock: { $gt: 0 },
+      });
+
+      conditions.push({
+        _id: { $in: productIds },
+      });
+    }
+
+    // 5. Active Discount -> DailyDiscount
+    if (discount === "true") {
+      const productIds = await DailyDiscount.distinct("productId", {
+        expiresAt: { $gt: now },
+      });
+
+      conditions.push({
+        _id: { $in: productIds },
+      });
+    }
+
+    // 6. Combine filters
+    const filter = conditions.length > 0 ? { $and: conditions } : {};
+
+    let query = Product.find(filter)
+      .sort({ createdAt: -1 })
+      .populate("variants");
+
+    // Latest: 9 newest matching products
+    if (latest === "true") {
+      query = query.limit(9);
+    }
+
+    const products = await query;
+
+    // 7. Attach active discount information
+    const activeDiscounts = await DailyDiscount.find({
+      productId: { $in: products.map((product) => product._id) },
+      expiresAt: { $gt: now },
+    }).lean();
+
+    const discountMap = new Map(
+      activeDiscounts.map((item) => [String(item.productId), item]),
+    );
+
+    const results = products.map((product) => {
+      const activeDiscount = discountMap.get(String(product._id));
+
+      return {
+        ...product.toJSON(),
+        isDiscount: !!activeDiscount,
+        discountPercent: activeDiscount?.discountPercent ?? 0,
+        discountPrice: activeDiscount?.discountPrice ?? null,
+      };
+    });
+
+    return res.json(results);
   } catch (error) {
     console.error("Failed fetching products:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Failed to fetch products",
+      error: error.message,
     });
   }
 };

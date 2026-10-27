@@ -18,13 +18,22 @@ const {
   createDailyDiscount,
 } = require("../controllers/discountController");
 const upload = require("../utils/storage");
+const { cacheResponse } = require("../middleware/cache");
 
-router.get("/", getAllProducts);
-router.get("/latest", getLatestProducts);
-router.get("/best-seller", getBestSellerProducts);
-router.get("/discounts/today", getDailyDiscounts);
+router.get("/", cacheResponse("products", 300), getAllProducts);
+router.get("/latest", cacheResponse("products", 300), getLatestProducts);
+router.get(
+  "/best-seller",
+  cacheResponse("products", 300),
+  getBestSellerProducts,
+);
+router.get(
+  "/discounts/today",
+  cacheResponse("products", 300),
+  getDailyDiscounts,
+);
 router.get("/discounts/generate", createDailyDiscount);
-router.get("/:id", getProductById);
+router.get("/:id", cacheResponse("products", 300), getProductById);
 router.put(
   "/:id",
   authMiddleware,

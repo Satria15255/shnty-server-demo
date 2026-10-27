@@ -51,10 +51,9 @@ exports.getUserProfile = async (req, res) => {
     const user = await User.findById(req.user.id).select("-password");
 
     if (!user) {
-      return;
-      res.status(404).json({ message: "User Not Found" });
+      return res.status(404).json({ message: "User Not Found" });
     }
-
+    console.log(user);
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -65,28 +64,39 @@ exports.updateProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
 
-    if (!user) return res.status(404).json({ message: "User Not Found" });
+    if (!user) {
+      return res.status(404).json({
+        message: "User Not Found",
+      });
+    }
 
-    user.name = req.body.name || user.name;
-    user.email = req.body.email || user.email;
-    user.address = req.body.address || user.address;
-    user.phoneNumber = req.body.phoneNumber || user.phoneNumber;
+    const { name, phoneNumber } = req.body;
 
-    const updateUser = await user.save();
+    if (name !== undefined) {
+      user.name = name.trim();
+    }
+
+    if (phoneNumber !== undefined) {
+      user.phoneNumber = phoneNumber.trim();
+    }
+
+    const updatedUser = await user.save();
 
     res.status(200).json({
       message: "Profile Updated",
       user: {
-        _id: updateUser._id,
-        name: updateUser.name,
-        email: updateUser.email,
-        address: updateUser.address,
-        phoneNumber: updateUser.phoneNumber,
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        phoneNumber: updatedUser.phoneNumber,
+        address: updatedUser.address,
+        role: updatedUser.role,
       },
     });
   } catch (error) {
     res.status(500).json({
-      message: error.message,
+      message: "Failed to update profile",
+      error: error.message,
     });
   }
 };
@@ -123,29 +133,157 @@ exports.updatePassword = async (req, res) => {
   }
 };
 
-exports.updateUserAddress = async (req, res) => {
+// ADDRESS CONTROLLER //
+exports.addUserAddress = async (req, res) => {
   try {
-    const fulledAddress = [];
     const user = await User.findById(req.user.id);
 
     if (!user) {
-      return res.status(404).json({ message: "user not found" });
+      return res.status(404).json({
+        message: "User Not Found",
+      });
     }
 
-    fulledAddress.push({
-      spesificAddress: req.body.spesificAddress,
-      country: req.body.country,
-      city: req.body.city,
+    const { label, country, city, specificAddress } = req.body;
+
+    user.address.push({
+      label: label || "Home",
+      country: country || "",
+      city: city || "",
+      specificAddress: specificAddress || "",
     });
 
-    user.address = fulledAddress;
+    await user.save();
+
+    res.status(201).json({
+      message: "Address Added",
+      address: user.address,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to add address",
+      error: error.message,
+    });
+  }
+};
+
+exports.updateUserAddress = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User Not Found",
+      });
+    }
+
+    const address = user.address.id(req.params.addressId);
+
+    if (!address) {
+      return res.status(404).json({
+        message: "Address Not Found",
+      });
+    }
+
+    const { label, country, city, specificAddress } = req.body;
+
+    if (label !== undefined) {
+      address.label = label.trim();
+    }
+
+    if (country !== undefined) {
+      address.country = country.trim();
+    }
+
+    if (city !== undefined) {
+      address.city = city.trim();
+    }
+
+    if (specificAddress !== undefined) {
+      address.specificAddress = specificAddress.trim();
+    }
 
     await user.save();
-    res.status(200).json({ message: "Address updated", user });
+
+    res.status(200).json({
+      message: "Address Updated",
+      address,
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Update Address Failed :(", error: error.message });
-    console.log(error);
+    res.status(500).json({
+      message: "Failed to update address",
+      error: error.message,
+    });
+  }
+};
+
+exports.deleteUserAddress = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User Not Found",
+      });
+    }
+
+    const address = user.address.id(req.params.addressId);
+
+    if (!address) {
+      return res.status(404).json({
+        message: "Address Not Found",
+      });
+    }
+
+    address.deleteOne();
+
+    await user.save();
+
+    res.status(200).json({
+      message: "Address Deleted",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to delete address",
+      error: error.message,
+    });
+  }
+};
+
+exports.setDefaultAddress = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User Not Found",
+      });
+    }
+
+    const selectedAddress = user.address.id(req.params.addressId);
+
+    if (!selectedAddress) {
+      return res.status(404).json({
+        message: "Address Not Found",
+      });
+    }
+
+    user.address.forEach((address) => {
+      address.isDefault = false;
+    });
+
+    selectedAddress.isDefault = true;
+
+    await user.save();
+
+    res.status(200).json({
+      message: "Default Address Updated",
+      address: selectedAddress,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to update default address",
+      error: error.message,
+    });
   }
 };

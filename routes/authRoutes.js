@@ -10,13 +10,24 @@ const {
 	getUserProfile,
 	updateProfile,
 	updatePassword,
+	addUserAddress,
 	updateUserAddress,
+	deleteUserAddress,
+	setDefaultAddress,
 } = require("../controllers/authController");
+const { authLimiter } = require("../middleware/rateLimiter");
 
-router.post("/register", registerUser);
-router.post("/login", loginUser);
-router.get("/user/profile", authMiddleware, getUserProfile);
-router.put("/user/profile", authMiddleware, updateProfile);
-router.put("/user/change-password", authMiddleware, updatePassword);
-router.put("/user/change-address", authMiddleware, updateUserAddress);
+router.post("/register", authLimiter, registerUser);
+router.post("/login", authLimiter, loginUser);
+router.get("/users/profile", authMiddleware, getUserProfile);
+router.post("/users/address", authMiddleware, addUserAddress);
+router.patch("/users/address/:addressId", authMiddleware, updateUserAddress);
+router.delete("/users/address/:addressId", authMiddleware, deleteUserAddress);
+router.patch(
+	"/users/address/:addressId/default",
+	authMiddleware,
+	setDefaultAddress,
+);
+router.patch("/users/profile", authMiddleware, updateProfile);
+router.put("/users/change-password", authMiddleware, updatePassword);
 module.exports = router;
