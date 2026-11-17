@@ -31,6 +31,17 @@ const addressSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    fullName: {
+      type: String,
+      default: "",
+    },
+
+    phone: {
+      type: String,
+      default: "",
+      trim: true,
+    },
   },
   {
     _id: true,

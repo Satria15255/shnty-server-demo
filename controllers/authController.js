@@ -144,12 +144,14 @@ exports.addUserAddress = async (req, res) => {
       });
     }
 
-    const { label, country, city, specificAddress } = req.body;
+    const { label, country, city, fullName, phone, specificAddress } = req.body;
 
     user.address.push({
       label: label || "Home",
       country: country || "",
       city: city || "",
+      fullName: fullName || "",
+      phone: phone || "",
       specificAddress: specificAddress || "",
     });
 
@@ -185,7 +187,7 @@ exports.updateUserAddress = async (req, res) => {
       });
     }
 
-    const { label, country, city, specificAddress } = req.body;
+    const { label, country, city, fullName, phone, specificAddress } = req.body;
 
     if (label !== undefined) {
       address.label = label.trim();
@@ -197,6 +199,14 @@ exports.updateUserAddress = async (req, res) => {
 
     if (city !== undefined) {
       address.city = city.trim();
+    }
+
+    if (fullName !== undefined) {
+      address.fullName = fullName.trim();
+    }
+
+    if (phone !== undefined) {
+      address.phone = phone.trim();
     }
 
     if (specificAddress !== undefined) {

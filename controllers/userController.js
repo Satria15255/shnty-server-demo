@@ -30,3 +30,53 @@ exports.getUserTransaction = async (req, res) => {
     res.status(500).json({ message: "Error get user transaction", err });
   }
 };
+
+exports.getUserWithTransactions = async (req, res) => {
+  try {
+    const { user } = req.params;
+
+    if (!mongoose.isValidObjectId(user)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid user ID" });
+    }
+
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+
+    const [users, transactions, totalTransactions] = await Promise.all([
+      User.findById(user).select("-password").lean(),
+      Transaction.find({ user })
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments({ user }),
+    ]);
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...users,
+        transactions,
+      },
+      pagination: {
+        page,
+        limit,
+        totalTransactions,
+        totalPages: Math.ceil(totalTransactions / limit),
+      },
+    });
+  } catch (error) {
+    console.error("getUserWithTransactions error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
+  }
+};

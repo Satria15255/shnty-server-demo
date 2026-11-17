@@ -18,5 +18,11 @@ router.get(
 	adminMiddleware,
 	userController.getUserTransaction,
 );
+router.get(
+	"/user-details/:user",
+	authMiddleware,
+	adminMiddleware,
+	userController.getUserWithTransactions,
+);
 
 module.exports = router;
